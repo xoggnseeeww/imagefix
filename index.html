@@ -3,105 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>바이브코딩 | 전문가급 이미지 리사이저 v1.2.5</title>
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
+    <title>바이브코딩 - 고성능 이미지 리사이저</title>
     <link rel="stylesheet" href="css/app.css">
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
-
-    <div id="app" class="max-w-5xl mx-auto px-4 py-8">
-        <header class="flex justify-between items-center mb-8">
-            <div>
-                <h1 class="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">바이브코딩</h1>
-                <p class="text-sm text-gray-500 mt-1">Production Hardening v1.2.5</p>
-            </div>
-            <button id="themeToggle" class="p-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:ring-2 ring-blue-500 transition-all">
-                <span class="dark:hidden">🌙 다크 모드</span>
-                <span class="hidden dark:inline">☀️ 라이트 모드</span>
-            </button>
+<body class="bg-slate-50 text-slate-900">
+    <div id="app" class="max-w-4xl mx-auto p-4 md:p-8">
+        <header class="text-center py-10">
+            <h1 class="text-3xl font-bold">VibeCoding Image Resizer</h1>
+            <p class="text-slate-500">서버 없이 안전하게, 기기 성능을 극한으로 사용하는 리사이저</p>
         </header>
 
-        <section id="dropZone" class="border-4 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-12 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors group cursor-pointer bg-white dark:bg-gray-800 shadow-sm">
-            <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
-            <div class="space-y-4">
-                <div class="text-5xl group-hover:scale-110 transition-transform inline-block">📸</div>
-                <h2 class="text-xl font-semibold lg:hidden">탭하여 사진 선택</h2>
-                <h2 class="text-xl font-semibold hidden lg:block">이미지를 드래그하거나 클릭하세요</h2>
-                <p class="text-gray-400">서버로 전송하지 않아 안전합니다 (100% Client-side)</p>
+        <main>
+            <div id="dropzone" class="border-4 border-dashed border-slate-200 rounded-2xl p-12 text-center hover:border-blue-400 transition-colors cursor-pointer">
+                <p>파일을 드래그하거나 클릭하여 업로드하세요</p>
             </div>
-        </section>
-
-        <section id="batchControls" class="mt-8 flex flex-wrap gap-4 justify-between items-end bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-            <div class="flex flex-wrap gap-6">
-                <div class="flex flex-col gap-2">
-                    <label class="text-sm font-bold text-gray-500">리사이즈 방식</label>
-                    <select id="resizeMode" class="bg-gray-50 dark:bg-gray-700 border-none rounded-md px-3 py-2 outline-none ring-1 ring-gray-200 dark:ring-gray-600 focus:ring-2 focus:ring-blue-500">
-                        <option value="width">가로 폭 맞춤 (px)</option>
-                        <option value="height">세로 높이 맞춤 (px)</option>
-                        <option value="percent">비율 축소 (%)</option>
-                    </select>
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label class="text-sm font-bold text-gray-500">설정값</label>
-                    <input type="number" id="resizeValue" value="1280" class="w-24 bg-gray-50 dark:bg-gray-700 border-none rounded-md px-3 py-2 outline-none ring-1 ring-gray-200 dark:ring-gray-600 focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label class="text-sm font-bold text-gray-500">저장 포맷</label>
-                    <select id="exportFormat" class="bg-gray-50 dark:bg-gray-700 border-none rounded-md px-3 py-2 outline-none ring-1 ring-gray-200 dark:ring-gray-600 focus:ring-2 focus:ring-blue-500">
-                        <option value="image/jpeg">JPEG (EXIF 보존)</option>
-                        <option value="image/png">PNG</option>
-                        <option value="image/webp">WEBP</option>
-                    </select>
+            
+            <div id="progress-container" class="mt-8 hidden">
+                <div class="w-full bg-slate-200 rounded-full h-4 overflow-hidden">
+                    <div id="overall-progress" class="bg-blue-500 h-full w-0 transition-all duration-300"></div>
                 </div>
             </div>
-
-            <div class="flex gap-2 ml-auto">
-                <button id="clearAllBtn" class="px-5 py-2.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium transition-colors">전체 삭제</button>
-                <button id="startBatchBtn" class="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95">변환 및 다운로드 (ZIP)</button>
-                <button id="exportPdfBtn" class="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-500/30 transition-all active:scale-95">PDF 병합</button>
-            </div>
-        </section>
-
-        <div id="fileQueue" class="mt-8 space-y-3">
-            </div>
-
-        <div id="compareModal" class="fixed inset-0 bg-black/90 z-50 hidden flex-col items-center justify-center p-4">
-            <div class="relative w-full max-w-4xl bg-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-                <div class="p-4 flex justify-between items-center border-b border-gray-700">
-                    <span class="font-bold text-white">화질 비교 (좌:원본 / 우:변환본)</span>
-                    <button class="closeModal text-gray-400 hover:text-white text-2xl">&times;</button>
-                </div>
-                <div id="compareSlider" class="relative h-[60vh] overflow-hidden select-none touch-none">
-                    </div>
-            </div>
-        </div>
-
-        <div id="cropModal" class="fixed inset-0 bg-black/90 z-50 hidden flex-col items-center justify-center p-4">
-            <div class="relative w-full max-w-4xl bg-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-                <div class="p-4 flex justify-between items-center border-b border-gray-700 text-white">
-                    <span class="font-bold">이미지 자르기</span>
-                    <div class="flex gap-4">
-                        <button id="saveCropBtn" class="text-blue-400 font-bold">적용</button>
-                        <button class="closeCropModal text-gray-400">취소</button>
-                    </div>
-                </div>
-                <div class="h-[70vh] bg-neutral-900">
-                    <img id="cropImage" src="" class="max-w-full hidden">
-                </div>
-            </div>
-        </div>
-
-        <div id="globalLoading" class="fixed inset-0 bg-white/80 dark:bg-gray-900/80 z-[100] hidden flex-col items-center justify-center">
-            <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p id="loadingText" class="mt-4 font-bold text-blue-600 dark:text-blue-400">처리 중...</p>
-        </div>
+        </main>
     </div>
 
-    <script type="module" src="js/app.js"></script>
+    <script type="module">
+        import { Support } from './js/support.js';
+        window.Support = Support;
+    </script>
+    <script src="js/app.js"></script>
 </body>
 </html>
