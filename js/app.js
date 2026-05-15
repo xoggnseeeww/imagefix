@@ -1,120 +1,96 @@
 /**
- * 바이브코딩 v1.2.5 - Master Controller
- * 주요 기능: 배치 큐 관리, 워커 오케스트레이션, PDF/ZIP 생성, UI 인터락
+ * Worker Pool 매니저
  */
-
-let queue = [];
-let isEditorOpen = false;
-let imageWorker = new Worker('js/image.worker.js');
-const usedNames = new Set(); // 파일명 중복 방지용
-
-// [v1.2.5] 페이지 이탈 방지
-window.addEventListener('beforeunload', (e) => {
-    if (queue.length > 0) {
-        e.preventDefault();
-        e.returnValue = '';
+class WorkerPool {
+    constructor(path, concurrency) {
+        this.path = path;
+        this.concurrency = concurrency;
+        this.workers = Array.from({ length: concurrency }, () => new Worker(path));
+        this.queue = [];
     }
-});
 
-// 드롭존 및 버튼 이벤트 연결
-document.addEventListener('DOMContentLoaded', () => {
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const startBatchBtn = document.getElementById('startBatchBtn');
-    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    enqueue(data) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ data, resolve, reject });
+            this.processNext();
+        });
+    }
 
-    dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = (e) => handleFiles(e.target.files);
-    
-    startBatchBtn.onclick = () => startBatchProcessing();
-    exportPdfBtn.onclick = () => handlePDFExport();
+    processNext() {
+        if (!this.queue.length || !this.workers.length) return;
+        const { data, resolve, reject } = this.queue.shift();
+        const worker = this.workers.pop();
 
-    // 테마 토글 로직 등...
-});
-
-/**
- * [v1.2.5] 파일 처리 로직 (중복 네이밍 방지 포함)
- */
-function handleFiles(files) {
-    for (const file of files) {
-        const uniqueName = generateUniqueName(file.name, usedNames);
-        const item = {
-            id: Date.now() + Math.random(),
-            file: file,
-            name: uniqueName,
-            status: 'ready',
-            processedBlob: null
+        const cleanUp = () => {
+            worker.removeEventListener('message', handleMsg);
+            worker.removeEventListener('error', handleErr);
+            this.workers.push(worker);
+            this.processNext();
         };
-        queue.push(item);
-        renderQueueItem(item);
+
+        const handleMsg = (e) => {
+            if (e.data.status === 'success') resolve(e.data);
+            else reject(new Error(e.data.reason));
+            cleanUp();
+        };
+
+        const handleErr = (err) => {
+            reject(err);
+            cleanUp();
+        };
+
+        worker.addEventListener('message', handleMsg);
+        worker.addEventListener('error', handleErr);
+        worker.postMessage(data);
     }
 }
 
-/**
- * [v1.2.5] 워커 타임아웃 래퍼 (시스템 강건성)
- */
-function processWithTimeout(worker, message, timeoutMs = 15000) {
-    return Promise.race([
-        new Promise((resolve, reject) => {
-            const handler = (e) => {
-                worker.removeEventListener('message', handler);
-                resolve(e.data);
-            };
-            worker.addEventListener('message', handler);
-            worker.postMessage(message, message.originalExif ? [message.originalExif] : []);
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), timeoutMs))
-    ]);
-}
+// 초기화
+const concurrency = (/iPad|iPhone|iPod/.test(navigator.userAgent)) ? 1 : Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) / 2));
+const resizePool = new WorkerPool('js/image.worker.js', concurrency);
+const exportWorker = new Worker('js/export.worker.js');
+
+let processedFiles = [];
 
 /**
- * [v1.2.5] 원자적 배치 처리 (Atomic Batch)
+ * 메인 실행 함수
  */
-async function startBatchProcessing() {
-    if (isEditorOpen) return alert("편집을 먼저 완료해주세요.");
-    
-    showLoading("이미지 변환 중...");
-    const zip = new JSZip();
-    let successCount = 0;
+async function startProcessing(files, options) {
+    processedFiles = [];
+    document.getElementById('progress-container').classList.remove('hidden');
 
-    for (const item of queue) {
+    const tasks = files.map(async (file, index) => {
         try {
-            updateStatus(item.id, 'processing');
-            
-            const result = await processWithTimeout(imageWorker, {
-                file: item.file,
-                config: getGlobalConfig()
-            });
-
-            item.processedBlob = new Blob([result.result], { type: item.file.type });
-            zip.file(item.name, item.processedBlob);
-            updateStatus(item.id, 'success');
-            successCount++;
-        } catch (err) {
-            console.error(err);
-            updateStatus(item.id, 'failed');
+            const result = await resizePool.enqueue({ file, options, taskId: index });
+            processedFiles.push({ blob: result.blob, name: result.originalName });
+            updateUIProgress(index, files.length);
+        } catch (e) {
+            console.error(e);
         }
-    }
+    });
 
-    if (successCount > 0) {
-        const content = await zip.generateAsync({ type: "blob" });
-        saveAs(content, `vibecoding_${Date.now()}.zip`);
-    }
-    
-    hideLoading();
-    alert(`작업 완료! (성공: ${successCount} / 실패: ${queue.length - successCount})`);
+    await Promise.all(tasks);
+    alert('모든 처리 완료!');
 }
 
 /**
- * [v1.2.5] PDF 메모리 세이프가드
+ * ZIP 다운로드 호출
  */
-async function handlePDFExport() {
-    const MAX_SAFE_SIZE = 200 * 1024 * 1024;
-    let totalSize = queue.reduce((acc, curr) => acc + (curr.processedBlob?.size || 0), 0);
-
-    if (totalSize > MAX_SAFE_SIZE && !confirm("용량이 너무 커서 브라우저가 멈출 수 있습니다. 진행할까요?")) return;
-
-    // jsPDF 병합 로직...
+function handleZipDownload() {
+    exportWorker.postMessage({ action: 'createZip', files: processedFiles, filename: 'vibecoding_final.zip' });
+    exportWorker.onmessage = (e) => {
+        if (e.data.status === 'success') {
+            const url = URL.createObjectURL(e.data.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = e.data.filename;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 60000); // 1분 후 메모리 해제
+        }
+    };
 }
 
-// 헬퍼 함수들 (generateUniqueName, updateStatus 등) 생략...
+function updateUIProgress(current, total) {
+    const percent = ((current + 1) / total) * 100;
+    document.getElementById('overall-progress').style.width = `${percent}%`;
+}
