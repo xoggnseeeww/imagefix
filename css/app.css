@@ -1,128 +1,23 @@
-/* 1. 기본 변수 및 테마 설정 */
-:root {
-    --primary-color: #2563eb;
-    --success-color: #10b981;
-    --error-color: #ef4444;
-    --bg-light: #f9fafb;
-    --bg-dark: #111827;
-    --card-light: #ffffff;
-    --card-dark: #1f2937;
-}
+/* 기본 레이아웃 */
+#app { min-height: 100vh; }
 
-/* 2. 다크모드 대응 */
-@media (prefers-color-scheme: dark) {
-    body:not(.light-mode) {
-        background-color: var(--bg-dark);
-        color: #f3f4f6;
-    }
-}
-
-body.dark-mode {
-    background-color: var(--bg-dark);
-    color: #f3f4f6;
-}
-
-/* 3. 비교 슬라이더 엔진 (핵심 UX) */
-#compareSlider {
-    position: relative;
+/* [수정] 모달 내부 뷰포트 탈출 방지 */
+.preview-modal img {
     width: 100%;
-    height: 100%;
-    cursor: col-resize;
-    overflow: hidden;
-}
-
-.slider-image {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    height: auto;
     object-fit: contain;
-    pointer-events: none;
+    border-radius: 12px;
 }
 
-/* 변환 후 이미지가 보여질 오버레이 영역 */
-#afterImageWrapper {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 50%; /* 초기 위치 */
-    height: 100%;
-    overflow: hidden;
-    border-right: 2px solid white;
-    z-index: 10;
-    will-change: width; /* GPU 가속 최적화 */
+/* 프로그레스 바 애니메이션 */
+#overall-progress {
+    background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+    animation: progress-bar-stripes 1s linear infinite;
 }
 
-#afterImage {
-    width: 100vw; /* 부모 wrapper가 잘라도 이미지는 전체폭 유지 */
-    height: 100%;
-    max-width: none;
-}
-
-/* 4. 파일 큐 아이템 디자인 */
-.queue-item {
-    display: grid;
-    grid-template-columns: 80px 1fr auto;
-    gap: 1rem;
-    align-items: center;
-    padding: 1rem;
-    border-radius: 0.75rem;
-    background: white;
-    border: 1px solid #e5e7eb;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.dark-mode .queue-item {
-    background: var(--card-dark);
-    border-color: #374151;
-}
-
-.queue-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.queue-item.processing {
-    border-left: 4px solid var(--primary-color);
-    background: #eff6ff;
-}
-
-.queue-item.success {
-    border-left: 4px solid var(--success-color);
-}
-
-.queue-item.failed {
-    border-left: 4px solid var(--error-color);
-}
-
-/* 5. 애니메이션 및 기타 보조 스타일 */
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.animate-spin {
-    animation: spin 1s linear infinite;
-}
-
-/* 드래그 앤 드롭 하이라이트 */
-#dropZone.drag-over {
-    border-color: var(--primary-color);
-    background-color: rgba(37, 99, 235, 0.05);
-}
-
-/* 버튼 비활성화 상태 (v1.2.5 인터락 기능) */
-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed !important;
-}
-
-/* 6. Cropperjs 커스텀 스타일 오버라이드 */
-.cropper-view-box,
-.cropper-face {
-    border-radius: 4px;
-}
-
-.cropper-line, .cropper-point {
-    background-color: var(--primary-color);
+@keyframes progress-bar-stripes {
+    from { background-position: 1rem 0; }
+    to { background-position: 0 0; }
 }
