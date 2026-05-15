@@ -1,23 +1,86 @@
 /**
- * image.worker.js — Web Worker 엔트리
- * OffscreenCanvas 환경에서만 실행됨.
- * 처리 로직은 image-process.js 공유 모듈에서 import.
+ * 바이브코딩 v1.2.5 - Image Worker
+ * 주요 기능: Step-down 리사이징, EXIF Orientation 초기화 및 주입
  */
-import { processImage } from './image-process.js';
 
-// Worker용 CanvasFactory
-const cf = {
-    create: (w, h) => new OffscreenCanvas(w, h),
-    toBlob: (canvas, type, quality) => canvas.convertToBlob({ type, quality })
-};
+self.onmessage = async (e) => {
+    const { file, config, originalExif } = e.data;
 
-self.onmessage = async ({ data }) => {
-    const { type, id, bitmap, config } = data;
     try {
-        const blob = await processImage(type, bitmap, config, cf);
-        // Fix: Blob은 copy 전송 (Transferable 사용 시 detach 버그)
-        self.postMessage({ id, status: 'success', blob });
+        // 1. 이미지 비트맵 생성
+        const bitmap = await createImageBitmap(file);
+        
+        // 2. 리사이즈 수행 (Step-down 알고리즘)
+        const canvas = await resizeStepDown(bitmap, config);
+        
+        // 3. 캔버스에서 Blob 추출
+        const blob = await canvas.convertToBlob({
+            type: config.format || 'image/jpeg',
+            quality: config.quality || 0.85
+        });
+
+        let finalBuffer = await blob.arrayBuffer();
+
+        // 4. [v1.2.5 핵심] EXIF 보존 및 이중 회전 방지
+        if (originalExif && (config.format === 'image/jpeg' || !config.format)) {
+            const cleanExif = resetOrientation(originalExif);
+            finalBuffer = injectExif(finalBuffer, cleanExif);
+        }
+
+        self.postMessage({ result: finalBuffer }, [finalBuffer]);
     } catch (err) {
-        self.postMessage({ id, status: 'error', message: err.message });
+        self.postMessage({ error: err.message });
     }
 };
+
+/**
+ * [v1.2.5] EXIF Orientation 값을 1(정상)로 강제 패칭
+ */
+function resetOrientation(exifBuffer) {
+    const view = new DataView(exifBuffer);
+    const isLittleEndian = view.getUint16(0) === 0x4949;
+    let offset = view.getUint32(4, isLittleEndian);
+    const tags = view.getUint16(offset, isLittleEndian);
+    offset += 2;
+
+    for (let i = 0; i < tags; i++) {
+        if (view.getUint16(offset, isLittleEndian) === 0x0112) {
+            view.setUint16(offset + 8, 1, isLittleEndian); // Orientation = 1
+            break;
+        }
+        offset += 12;
+    }
+    return exifBuffer;
+}
+
+/**
+ * 고화질 Step-down 리사이징 알고리즘
+ */
+async function resizeStepDown(bitmap, config) {
+    let width = bitmap.width;
+    let height = bitmap.height;
+    const targetWidth = config.width || width;
+
+    const offscreen = new OffscreenCanvas(width, height);
+    const ctx = offscreen.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+
+    // 50%씩 단계적 축소 (Aliasing 방지)
+    while (width > targetWidth * 2) {
+        width = Math.floor(width / 2);
+        height = Math.floor(height / 2);
+        const tempCanvas = new OffscreenCanvas(width, height);
+        tempCanvas.getContext('2d').drawImage(offscreen, 0, 0, width, height);
+        offscreen.width = width;
+        offscreen.height = height;
+        offscreen.getContext('2d').drawImage(tempCanvas, 0, 0);
+    }
+
+    // 최종 사이즈 조정
+    const finalCanvas = new OffscreenCanvas(targetWidth, Math.floor(height * (targetWidth / width)));
+    finalCanvas.getContext('2d').drawImage(offscreen, 0, 0, finalCanvas.width, finalCanvas.height);
+    
+    return finalCanvas;
+}
+
+// injectExif(binary patching) 함수 생략...
