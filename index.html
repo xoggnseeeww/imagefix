@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ImageFix — 이미지 도구 모음</title>
-    <!-- FOUC 방지: 렌더링 전 저장된 테마 적용 -->
     <script>
         (function() {
             const t = localStorage.getItem('imagefix-theme');
@@ -25,16 +24,20 @@
                     <path d="M3 9h18M9 21V9"/>
                 </svg>
                 <span class="brand-name">ImageFix</span>
-                <span class="brand-ver">v2.7</span>
+                <span class="brand-ver">v3.0</span>
             </div>
-            <div id="global-progress" class="global-progress hidden">
-                <div id="progress-bar" class="progress-fill"></div>
+
+            <!-- 진행 바 + ETA -->
+            <div class="progress-wrap hidden" id="progress-wrap">
+                <div id="global-progress" class="global-progress">
+                    <div id="progress-bar" class="progress-fill"></div>
+                </div>
+                <span id="eta-label" class="eta-label"></span>
             </div>
+
             <div class="header-right">
                 <div id="env-badge" class="env-badge hidden"></div>
-                <button id="theme-toggle" class="theme-toggle" title="테마 전환" aria-label="테마 전환">
-                    <!-- JS에서 아이콘 삽입 -->
-                </button>
+                <button id="theme-toggle" class="theme-toggle" title="테마 전환" aria-label="테마 전환"></button>
             </div>
         </header>
 
@@ -47,6 +50,10 @@
             <button class="tab" data-tab="pdf2jpg">↓ PDF→JPG</button>
             <button class="tab" data-tab="jpg2pdf">↑ JPG→PDF</button>
         </nav>
+
+        <div id="shortcut-hint" class="shortcut-hint hidden">
+            <span>⌨ <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 처리 시작 · <kbd>Esc</kbd> 중단</span>
+        </div>
 
         <main id="workspace">
             <div id="drop-zone" class="drop-zone">
@@ -63,15 +70,23 @@
             <div id="queue-section" class="queue-section hidden">
                 <div class="queue-header">
                     <span class="queue-label">대기열 <span id="queue-count" class="queue-count">0</span></span>
-                    <button id="clear-btn" class="btn-ghost">전체 삭제</button>
+                    <div class="queue-header-actions">
+                        <button id="add-file-btn" class="btn-ghost">+ 파일 추가</button>
+                        <button id="clear-btn"    class="btn-ghost">전체 삭제</button>
+                    </div>
                 </div>
                 <div id="queue-list" class="queue-list"></div>
                 <div class="action-bar">
-                    <button id="preview-btn" class="btn-secondary">미리보기</button>
-                    <button id="start-btn" class="btn-primary">처리 시작</button>
+                    <button id="preview-btn"  class="btn-secondary">미리보기</button>
+                    <button id="start-btn"    class="btn-primary">처리 시작</button>
+                    <button id="cancel-btn"   class="btn-danger hidden">중단</button>
+                    <button id="retry-btn"    class="btn-secondary hidden">↺ 재처리</button>
                     <button id="download-btn" class="btn-secondary hidden">결과 다운로드</button>
                 </div>
             </div>
+
+            <!-- 8순위: 완료 통계 배너 -->
+            <div id="stats-banner" class="stats-banner hidden"></div>
 
             <div id="preview-section" class="preview-section hidden">
                 <div class="preview-header">
@@ -80,7 +95,7 @@
                     <div class="preview-stats" id="preview-stats"></div>
                 </div>
                 <div class="compare-wrap" id="compare-wrap"></div>
-                <p class="preview-note">첫 번째 파일 기준 · 설정 변경 후 다시 누르면 업데이트</p>
+                <p class="preview-note" id="preview-note">첫 번째 파일 기준 · 설정 변경 후 다시 누르면 업데이트</p>
             </div>
         </main>
     </div>
